@@ -1,0 +1,93 @@
+import numpy as np
+import pandas as pd
+
+# -------------------------
+# Adoption Speed (Liquidity proxy)
+# -------------------------
+def adoption_speed_score(df: pd.DataFrame) -> float:
+    if df.empty:
+        return 0.0
+
+    df = df.copy()
+    df["first_seen"] = pd.to_datetime(df["first_seen"])
+    df["last_seen"] = pd.to_datetime(df["last_seen"])
+
+    df["days_on_market"] = (df["last_seen"] - df["first_seen"]).dt.days
+    avg_days = df["days_on_market"].mean()
+
+    # Faster market = higher score
+    score = max(0, 100 - avg_days)
+    return min(score, 100)
+
+
+# -------------------------
+# Risk score (price dispersion)
+# -------------------------
+def risk_score_from_dispersion(df: pd.DataFrame) -> float:
+    if df.empty:
+        return 0.0
+
+    prices = df["price"].dropna()
+    if prices.empty:
+        return 0.0
+
+    q1 = prices.quantile(0.25)
+    q3 = prices.quantile(0.75)
+    median = prices.median()
+
+    dispersion = (q3 - q1) / median if median > 0 else 1
+
+    # Lower dispersion = lower risk = higher score
+    score = max(0, 100 - dispersion * 100)
+    return min(score, 100)
+
+
+# -------------------------
+# Yield (placeholder)
+# -------------------------
+def yield_score_placeholder(df: pd.DataFrame) -> float:
+    if df.empty:
+        return 0.0
+
+    # Proxy: cheaper price per sqm = higher yield potential
+    price_per_sqm = df["price"] / df["size_sqm"]
+    median_ppsqm = price_per_sqm.median()
+
+    if median_ppsqm <= 0:
+        return 0.0
+
+    score = 100000 / median_ppsqm
+    return min(score, 100)
+
+
+# -------------------------
+# Momentum (placeholder)
+# -------------------------
+def momentum_score_placeholder(df: pd.DataFrame) -> float:
+    # No historical prices yet → neutral but non-zero
+    return 50.0
+
+
+# -------------------------
+# Market depth
+# -------------------------
+def market_depth_score(df: pd.DataFrame) -> float:
+    if df.empty:
+        return 0.0
+
+    volume_score = min(len(df), 100)
+    return float(volume_score)
+
+
+# -------------------------
+# Barzel Score aggregation
+# -------------------------
+def barzel_score(yield_s, liquidity_s, risk_s, momentum_s, depth_s) -> float:
+    return (
+        0.25 * yield_s +
+        0.25 * liquidity_s +
+        0.20 * risk_s +
+        0.20 * momentum_s +
+        0.10 * depth_s
+    )
+

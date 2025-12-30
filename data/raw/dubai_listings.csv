@@ -1,0 +1,16 @@
+id,source,district,price,size_sqm,bedrooms,property_type,latitude,longitude,first_seen,last_seen
+pf_1,PropertyFinder,Marina,1450000,72,1,Apartment,25.0800,55.1400,2025-10-01,2025-10-20
+pf_2,PropertyFinder,Marina,2100000,98,2,Apartment,25.0780,55.1370,2025-10-05,2025-10-29
+pf_3,PropertyFinder,Marina,980000,45,0,Apartment,25.0820,55.1420,2025-10-03,2025-10-12
+pf_4,PropertyFinder,Business Bay,1550000,70,1,Apartment,25.1860,55.2680,2025-10-02,2025-10-18
+pf_5,PropertyFinder,Business Bay,2400000,110,2,Apartment,25.1890,55.2700,2025-10-06,2025-10-30
+pf_6,PropertyFinder,Business Bay,1200000,52,0,Apartment,25.1850,55.2660,2025-10-04,2025-10-14
+pf_7,PropertyFinder,JVC,920000,78,1,Apartment,25.0600,55.2100,2025-10-01,2025-10-25
+pf_8,PropertyFinder,JVC,1350000,105,2,Apartment,25.0550,55.2050,2025-10-07,2025-10-28
+pf_9,PropertyFinder,JVC,720000,52,0,Apartment,25.0570,55.2070,2025-10-03,2025-10-10
+by_1,Bayut,Marina,1600000,74,1,Apartment,25.0790,55.1390,2025-10-08,2025-10-22
+by_2,Bayut,Marina,2250000,100,2,Apartment,25.0770,55.1380,2025-10-09,2025-10-31
+by_3,Bayut,Business Bay,1650000,72,1,Apartment,25.1870,55.2690,2025-10-08,2025-10-20
+by_4,Bayut,Business Bay,2550000,115,2,Apartment,25.1900,55.2710,2025-10-10,2025-10-31
+by_5,Bayut,JVC,950000,80,1,Apartment,25.0610,55.2110,2025-10-09,2025-10-26
+by_6,Bayut,JVC,1400000,108,2,Apartment,25.0540,55.2060,2025-10-11,2025-10-31
