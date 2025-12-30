@@ -7,27 +7,18 @@ from sqlalchemy import create_engine
 
 def get_database_url() -> str:
     """
-    Priority:
-    1) Streamlit Cloud secrets (st.secrets["DATABASE_URL"])
-    2) Environment variable (DATABASE_URL)
-    3) Local .env (via python-dotenv) - optional fallback
+    Resolution order (clean & production-safe):
+    1) Streamlit Cloud secrets injected as env vars
+    2) OS environment variable
+    3) Local .env (development fallback)
     """
-    # 1) Streamlit secrets (Cloud)
-    try:
-        import streamlit as st  # local import to avoid issues in non-streamlit contexts
 
-        if "DATABASE_URL" in st.secrets:
-            return str(st.secrets["DATABASE_URL"])
-    except Exception:
-        # If streamlit isn't available or secrets not configured, ignore
-        pass
-
-    # 2) OS env var
+    # 1) Streamlit Cloud injects secrets as env vars
     url = os.getenv("DATABASE_URL")
     if url:
         return url
 
-    # 3) Local .env fallback (optional)
+    # 2) Local .env fallback (dev only)
     try:
         from dotenv import load_dotenv
 
@@ -39,14 +30,12 @@ def get_database_url() -> str:
         pass
 
     raise ValueError(
-        "DATABASE_URL is missing. "
-        "Set it in Streamlit Cloud: Manage app → Settings → Secrets as DATABASE_URL, "
-        "or export DATABASE_URL locally / put it in .env."
+        "DATABASE_URL is missing.\n"
+        "Set it in Streamlit Cloud: Manage app → Settings → Secrets\n"
+        "or export DATABASE_URL locally / put it in a .env file."
     )
 
 
 def get_engine():
     url = get_database_url()
-
-    # SQLAlchemy accepts postgresql://... and postgresql+psycopg2://...
     return create_engine(url, pool_pre_ping=True)
