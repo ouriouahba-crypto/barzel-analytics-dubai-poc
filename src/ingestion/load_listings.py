@@ -11,25 +11,33 @@ EXPECTED_COLS = [
 def main():
     df = pd.read_csv(CSV_PATH)
 
-    # Normalize column names
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # Validate columns
     missing = [c for c in EXPECTED_COLS if c not in df.columns]
     if missing:
         raise ValueError(f"CSV is missing columns: {missing}")
 
-    # Keep only expected columns in correct order
-    df = df[EXPECTED_COLS]
+    df = df[EXPECTED_COLS].copy()
 
-    # Basic cleanup
+    # basic cleanup
     df["district"] = df["district"].astype(str).str.strip()
     df["source"] = df["source"].astype(str).str.strip()
     df["property_type"] = df["property_type"].astype(str).str.strip()
 
+    # force numeric types (important for KPIs)
+    for col in ["price", "size_sqm", "bedrooms", "latitude", "longitude"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # force datetime
+    df["first_seen"] = pd.to_datetime(df["first_seen"], errors="coerce")
+    df["last_seen"] = pd.to_datetime(df["last_seen"], errors="coerce")
+
+    # fail fast if critical columns are broken
+    if df["price"].isna().mean() > 0.10 or df["size_sqm"].isna().mean() > 0.10:
+        raise ValueError("Too many NaNs in price/size_sqm after parsing. Check CSV formatting.")
+
     engine = get_engine()
 
-    # Insert (append). If duplicate id exists, it will fail (primary key).
     df.to_sql("listings", engine, if_exists="append", index=False)
     print(f"Loaded {len(df)} rows into listings")
 

@@ -1,16 +1,63 @@
 id,source,district,price,size_sqm,bedrooms,property_type,latitude,longitude,first_seen,last_seen
-pf_1,PropertyFinder,Marina,1450000,72,1,Apartment,25.0800,55.1400,2025-10-01,2025-10-20
-pf_2,PropertyFinder,Marina,2100000,98,2,Apartment,25.0780,55.1370,2025-10-05,2025-10-29
-pf_3,PropertyFinder,Marina,980000,45,0,Apartment,25.0820,55.1420,2025-10-03,2025-10-12
-pf_4,PropertyFinder,Business Bay,1550000,70,1,Apartment,25.1860,55.2680,2025-10-02,2025-10-18
-pf_5,PropertyFinder,Business Bay,2400000,110,2,Apartment,25.1890,55.2700,2025-10-06,2025-10-30
-pf_6,PropertyFinder,Business Bay,1200000,52,0,Apartment,25.1850,55.2660,2025-10-04,2025-10-14
-pf_7,PropertyFinder,JVC,920000,78,1,Apartment,25.0600,55.2100,2025-10-01,2025-10-25
-pf_8,PropertyFinder,JVC,1350000,105,2,Apartment,25.0550,55.2050,2025-10-07,2025-10-28
-pf_9,PropertyFinder,JVC,720000,52,0,Apartment,25.0570,55.2070,2025-10-03,2025-10-10
-by_1,Bayut,Marina,1600000,74,1,Apartment,25.0790,55.1390,2025-10-08,2025-10-22
-by_2,Bayut,Marina,2250000,100,2,Apartment,25.0770,55.1380,2025-10-09,2025-10-31
-by_3,Bayut,Business Bay,1650000,72,1,Apartment,25.1870,55.2690,2025-10-08,2025-10-20
-by_4,Bayut,Business Bay,2550000,115,2,Apartment,25.1900,55.2710,2025-10-10,2025-10-31
-by_5,Bayut,JVC,950000,80,1,Apartment,25.0610,55.2110,2025-10-09,2025-10-26
-by_6,Bayut,JVC,1400000,108,2,Apartment,25.0540,55.2060,2025-10-11,2025-10-31
+syn_m_01,Synthetic,Marina,1380000,70,1,Apartment,25.0798,55.1389,2025-09-10,2025-10-12
+syn_m_02,Synthetic,Marina,1520000,75,1,Apartment,25.0811,55.1412,2025-09-18,2025-10-25
+syn_m_03,Synthetic,Marina,980000,48,0,Apartment,25.0824,55.1420,2025-09-25,2025-10-08
+syn_m_04,Synthetic,Marina,2100000,96,2,Apartment,25.0779,55.1376,2025-09-05,2025-10-30
+syn_m_05,Synthetic,Marina,2250000,102,2,Apartment,25.0786,55.1394,2025-09-15,2025-10-31
+syn_m_06,Synthetic,Marina,1600000,74,1,Apartment,25.0803,55.1401,2025-09-20,2025-10-22
+syn_m_07,Synthetic,Marina,1450000,72,1,Apartment,25.0790,55.1390,2025-09-28,2025-10-20
+syn_m_08,Synthetic,Marina,990000,50,0,Apartment,25.0820,55.1415,2025-10-01,2025-10-14
+syn_m_09,Synthetic,Marina,1750000,82,1,Apartment,25.0782,55.1383,2025-09-12,2025-10-27
+syn_m_10,Synthetic,Marina,2300000,110,2,Apartment,25.0775,55.1372,2025-09-08,2025-10-31
+syn_m_11,Synthetic,Marina,1420000,71,1,Apartment,25.0808,55.1407,2025-09-22,2025-10-19
+syn_m_12,Synthetic,Marina,2050000,95,2,Apartment,25.0792,55.1398,2025-09-11,2025-10-29
+syn_m_13,Synthetic,Marina,1020000,52,0,Apartment,25.0827,55.1423,2025-09-30,2025-10-10
+syn_m_14,Synthetic,Marina,1580000,76,1,Apartment,25.0816,55.1410,2025-09-16,2025-10-23
+syn_m_15,Synthetic,Marina,2180000,100,2,Apartment,25.0789,55.1387,2025-09-06,2025-10-31
+syn_m_16,Synthetic,Marina,1480000,73,1,Apartment,25.0801,55.1403,2025-09-24,2025-10-21
+syn_m_17,Synthetic,Marina,970000,47,0,Apartment,25.0829,55.1426,2025-10-02,2025-10-11
+syn_m_18,Synthetic,Marina,1680000,80,1,Apartment,25.0795,55.1396,2025-09-14,2025-10-28
+syn_m_19,Synthetic,Marina,2350000,112,2,Apartment,25.0778,55.1379,2025-09-07,2025-10-31
+syn_m_20,Synthetic,Marina,1550000,75,1,Apartment,25.0806,55.1409,2025-09-19,2025-10-24
+
+syn_b_01,Synthetic,Business Bay,1320000,68,1,Apartment,25.1862,55.2679,2025-09-12,2025-10-18
+syn_b_02,Synthetic,Business Bay,1180000,55,0,Apartment,25.1854,55.2668,2025-09-28,2025-10-09
+syn_b_03,Synthetic,Business Bay,2450000,112,2,Apartment,25.1895,55.2708,2025-09-06,2025-10-31
+syn_b_04,Synthetic,Business Bay,1620000,74,1,Apartment,25.1871,55.2692,2025-09-15,2025-10-22
+syn_b_05,Synthetic,Business Bay,2550000,118,2,Apartment,25.1902,55.2715,2025-09-04,2025-10-31
+syn_b_06,Synthetic,Business Bay,1250000,58,0,Apartment,25.1849,55.2661,2025-10-01,2025-10-12
+syn_b_07,Synthetic,Business Bay,1700000,78,1,Apartment,25.1868,55.2687,2025-09-10,2025-10-25
+syn_b_08,Synthetic,Business Bay,1380000,70,1,Apartment,25.1879,55.2698,2025-09-20,2025-10-20
+syn_b_09,Synthetic,Business Bay,2400000,110,2,Apartment,25.1890,55.2703,2025-09-08,2025-10-30
+syn_b_10,Synthetic,Business Bay,1200000,56,0,Apartment,25.1858,55.2672,2025-09-30,2025-10-11
+syn_b_11,Synthetic,Business Bay,1580000,72,1,Apartment,25.1874,55.2695,2025-09-18,2025-10-21
+syn_b_12,Synthetic,Business Bay,2480000,115,2,Apartment,25.1900,55.2712,2025-09-05,2025-10-31
+syn_b_13,Synthetic,Business Bay,1350000,69,1,Apartment,25.1860,55.2681,2025-09-22,2025-10-19
+syn_b_14,Synthetic,Business Bay,1220000,57,0,Apartment,25.1851,55.2665,2025-10-02,2025-10-10
+syn_b_15,Synthetic,Business Bay,1650000,76,1,Apartment,25.1882,55.2699,2025-09-14,2025-10-27
+syn_b_16,Synthetic,Business Bay,2600000,120,2,Apartment,25.1905,55.2718,2025-09-03,2025-10-31
+syn_b_17,Synthetic,Business Bay,1400000,71,1,Apartment,25.1865,55.2684,2025-09-24,2025-10-23
+syn_b_18,Synthetic,Business Bay,1280000,60,0,Apartment,25.1856,55.2669,2025-09-29,2025-10-13
+syn_b_19,Synthetic,Business Bay,1720000,80,1,Apartment,25.1877,55.2696,2025-09-11,2025-10-26
+syn_b_20,Synthetic,Business Bay,2500000,118,2,Apartment,25.1898,55.2710,2025-09-07,2025-10-31
+
+syn_j_01,Synthetic,JVC,820000,75,1,Apartment,25.0608,55.2109,2025-09-15,2025-10-26
+syn_j_02,Synthetic,JVC,720000,52,0,Apartment,25.0573,55.2075,2025-09-28,2025-10-10
+syn_j_03,Synthetic,JVC,1350000,104,2,Apartment,25.0548,55.2059,2025-09-06,2025-10-30
+syn_j_04,Synthetic,JVC,900000,78,1,Apartment,25.0612,55.2114,2025-09-20,2025-10-25
+syn_j_05,Synthetic,JVC,750000,55,0,Apartment,25.0569,55.2071,2025-10-01,2025-10-12
+syn_j_06,Synthetic,JVC,1400000,108,2,Apartment,25.0545,55.2063,2025-09-05,2025-10-31
+syn_j_07,Synthetic,JVC,980000,82,1,Apartment,25.0602,55.2101,2025-09-14,2025-10-27
+syn_j_08,Synthetic,JVC,700000,50,0,Apartment,25.0578,55.2078,2025-09-30,2025-10-09
+syn_j_09,Synthetic,JVC,1300000,100,2,Apartment,25.0552,55.2066,2025-09-08,2025-10-29
+syn_j_10,Synthetic,JVC,860000,76,1,Apartment,25.0610,55.2110,2025-09-22,2025-10-21
+syn_j_11,Synthetic,JVC,790000,58,0,Apartment,25.0565,55.2069,2025-09-29,2025-10-13
+syn_j_12,Synthetic,JVC,1450000,110,2,Apartment,25.0540,55.2055,2025-09-04,2025-10-31
+syn_j_13,Synthetic,JVC,920000,80,1,Apartment,25.0605,55.2104,2025-09-18,2025-10-26
+syn_j_14,Synthetic,JVC,740000,54,0,Apartment,25.0571,55.2073,2025-10-02,2025-10-11
+syn_j_15,Synthetic,JVC,1380000,106,2,Apartment,25.0550,55.2060,2025-09-07,2025-10-30
+syn_j_16,Synthetic,JVC,880000,77,1,Apartment,25.0615,55.2118,2025-09-16,2025-10-24
+syn_j_17,Synthetic,JVC,760000,56,0,Apartment,25.0567,55.2070,2025-09-27,2025-10-12
+syn_j_18,Synthetic,JVC,1420000,108,2,Apartment,25.0543,55.2058,2025-09-05,2025-10-31
+syn_j_19,Synthetic,JVC,950000,82,1,Apartment,25.0609,55.2107,2025-09-13,2025-10-28
+syn_j_20,Synthetic,JVC,730000,53,0,Apartment,25.0574,55.2076,2025-10-01,2025-10-10
