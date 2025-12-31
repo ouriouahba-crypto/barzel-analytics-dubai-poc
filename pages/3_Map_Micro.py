@@ -6,12 +6,18 @@ import plotly.express as px
 from sqlalchemy import text
 
 from src.app.pdf import build_micro_memo_pdf
-from src.app.guardrails import require_non_empty, now_utc_str, district_counts, warn_low_coverage, warn_low_sample
+from src.app.guardrails import (
+    require_non_empty,
+    now_utc_str,
+    district_counts,
+    warn_low_coverage,
+    warn_low_sample,
+)
 from src.processing.kpis import adoption_speed_score
 from src.db.db import get_engine
 
-
 from src.app.ui import inject_base_ui, hero, metric_grid, pill
+
 inject_base_ui()
 
 DISTRICTS = ["Marina", "Business Bay", "JVC"]
@@ -43,7 +49,7 @@ def _ppsqm_series(df: pd.DataFrame) -> pd.Series:
 
 
 def _confidence_bucket(n: int) -> str:
-    # Simple + consistent with your engine gating philosophy
+    # Aligned with engine.py
     if n >= 20:
         return "High"
     if n >= 10:
@@ -54,13 +60,12 @@ def _confidence_bucket(n: int) -> str:
 df_all = load_data()
 require_non_empty(df_all, "listings")
 
-# Soft quality warnings
 warn_low_coverage(df_all, "latitude", 0.40, "latitude")
 warn_low_coverage(df_all, "longitude", 0.40, "longitude")
 warn_low_coverage(df_all, "price", 0.70, "price")
 warn_low_coverage(df_all, "size_sqm", 0.60, "size_sqm")
 
-# Sidebar Filters
+# Sidebar filters
 st.sidebar.header("Filters")
 district = st.sidebar.selectbox("District", ["All"] + DISTRICTS, index=0)
 
@@ -91,10 +96,10 @@ warn_low_sample(n, "Filtered sample size")
 
 hero(
     "Map & Micro",
-    "Spatial view + micro read (filters: district, bedrooms). Screening only.",
+    "Micro sanity-check to validate distribution (outliers, dispersion pockets). Screening only.",
     pills=[
         pill(f"Confidence: {conf}", "good" if conf == "High" else ("warn" if conf == "Medium" else "bad")),
-        pill("Proxies (not underwriting)", "warn"),
+        pill("Descriptive only (not underwriting)", "warn"),
         pill(f"Refresh: {now_utc_str()}", "good"),
     ],
 )
@@ -104,39 +109,35 @@ st.caption(
     f"(District: **{district}**, Bedrooms: **{bedrooms if bedrooms else 'All'}**)"
 )
 
-# Global benchmarks (data-driven thresholds)
-g_ppsqm = _ppsqm_series(df_all)
-q_global = None
-if not g_ppsqm.empty:
-    q_global = g_ppsqm.quantile([0.25, 0.50, 0.75]).to_dict()
+st.info(
+    "Purpose: this page is **not** the decision engine. "
+    "It is a **micro sanity-check** to detect outliers and distribution issues before moving to underwriting."
+)
 
-# Micro snapshot metrics
+# Global benchmark
+g_ppsqm = _ppsqm_series(df_all)
+q_global = g_ppsqm.quantile([0.25, 0.50, 0.75]).to_dict() if not g_ppsqm.empty else None
+
 median_price = float(df["price"].median()) if (n > 0 and "price" in df.columns) else 0.0
 median_size = float(df["size_sqm"].median()) if (n > 0 and "size_sqm" in df.columns) else 0.0
 
 ppsqm_local = _ppsqm_series(df)
 median_ppsqm = float(ppsqm_local.median()) if not ppsqm_local.empty else 0.0
 
-# Liquidity local (single district only)
 liq_local = None
 if district != "All" and n > 0:
     liq_local = float(adoption_speed_score(df, df_all))
 
-# Pricing tightness (IQR of ppsqm)
 iqr_val = None
 if not ppsqm_local.empty and len(ppsqm_local) >= 5:
     q25, q75 = ppsqm_local.quantile([0.25, 0.75])
     iqr_val = float(q75 - q25)
 
-# Market percentile (where the local median sits in the global distribution)
 pct_val = None
 if not ppsqm_local.empty and not g_ppsqm.empty:
     local_median = float(ppsqm_local.median())
     pct_val = float((g_ppsqm <= local_median).mean() * 100.0)
 
-# -------------------------
-# Micro call (gated + defensible)
-# -------------------------
 def pricing_level_call(pct: float | None) -> str:
     if pct is None:
         return "pricing level: unknown"
@@ -146,11 +147,9 @@ def pricing_level_call(pct: float | None) -> str:
         return "pricing level: mid-market"
     return "pricing level: value"
 
-def dispersion_call(iqr: float | None, qg: dict | None) -> str:
+def dispersion_call(iqr: float | None, _qg: dict | None) -> str:
     if iqr is None:
         return "dispersion: unknown"
-    # If we can benchmark: compare local IQR to global median IQR proxy using spread bands (rough)
-    # Without true global IQR distribution, keep it simple and qualitative.
     if iqr <= 2500:
         return "dispersion: tight"
     if iqr <= 6000:
@@ -170,7 +169,7 @@ micro_call = [pricing_level_call(pct_val), dispersion_call(iqr_val, q_global), l
 
 if conf == "Low":
     st.warning("Micro read is **too thin** under current filters. We show descriptive stats, but avoid strong calls.")
-    st.info("Tip: remove filters or select a broader bedroom range to increase n.")
+    st.info("Tip: remove filters or broaden the bedroom range to increase n.")
 else:
     st.success(f"Micro read: **{micro_call[0]}, {micro_call[1]}, {micro_call[2]}** (screening only)")
 
@@ -191,7 +190,6 @@ else:
             mask = map_df["price"].notna() & map_df["size_sqm"].notna() & (map_df["size_sqm"] > 0)
             map_df.loc[mask, "price_per_sqm"] = map_df.loc[mask, "price"] / map_df.loc[mask, "size_sqm"]
 
-        # Color by price_per_sqm so the map conveys something business-relevant
         fig = px.scatter_mapbox(
             map_df,
             lat="latitude",
@@ -249,7 +247,7 @@ else:
         hist.update_layout(margin=dict(l=0, r=0, t=50, b=0))
         st.plotly_chart(hist, use_container_width=True)
 
-st.caption("Note: histogram is winsorized (2%–98%) to reduce outlier impact on visualization.")
+st.caption("Histogram is winsorized (2%–98%) to reduce outlier impact.")
 
 # -------------------------
 # Micro signals
@@ -288,22 +286,25 @@ with sig4:
 # -------------------------
 # Micro Summary (so-what)
 # -------------------------
-st.markdown("### Micro Summary")
+st.markdown("### Micro Summary (screening)")
 pct_display = f"P{pct_val:.0f}" if pct_val is not None else "no benchmark"
 iqr_display = f"{iqr_val:,.0f}" if iqr_val is not None else "—"
 liq_display = f"{liq_local:.1f}" if liq_local is not None else "—"
 
 if conf == "Low":
-    st.write("• **Low confidence** under current filters — treat this as descriptive only.")
+    st.write("• **Low confidence** under current filters — treat as descriptive only.")
 else:
-    st.write(f"• Pricing indicates **{micro_call[0].split(': ')[1]}** ({pct_display}) with **{micro_call[1].split(': ')[1]}** dispersion (IQR {iqr_display} AED/sqm).")
+    st.write(
+        f"• Pricing indicates **{micro_call[0].split(': ')[1]}** ({pct_display}) with "
+        f"**{micro_call[1].split(': ')[1]}** dispersion (IQR {iqr_display} AED/sqm)."
+    )
 
 if district == "All":
-    st.write("• Select a single district to compute a local liquidity signal (Adoption Speed) for a cleaner micro read.")
+    st.write("• Select a single district to compute a cleaner local liquidity proxy (Adoption Speed).")
 else:
-    st.write(f"• Liquidity signal for **{district}** is **{micro_call[2].split(': ')[1]}** (Adoption Speed {liq_display}).")
+    st.write(f"• Liquidity proxy for **{district}** is **{micro_call[2].split(': ')[1]}** (Adoption Speed {liq_display}).")
 
-st.caption("Micro Summary is descriptive only (does not affect the Recommendation engine).")
+st.caption("Micro Summary is descriptive only and does not drive the Recommendation engine.")
 
 # -------------------------
 # Data provenance + Export

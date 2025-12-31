@@ -3,31 +3,31 @@ from __future__ import annotations
 
 import io
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+# Single source of truth for confidence/gating (align with engine.py)
+from src.processing.engine import RECO_MIN_N, confidence_label, can_recommend
+
+# ------------------------------------------------------------
 # Demo metadata (used in every memo)
+# ------------------------------------------------------------
+BRAND = "Barzel Analytics"
 DATASET_NAME = "Dubai POC"
 DATASET_VERSION = "v0.1"
-BRAND = "Barzel Analytics"
 
 # Global conventions
 RISK_CONVENTION = "Risk Index: higher = more risky (dispersion proxy)."
 YIELD_CONVENTION = "Yield Potential: value proxy from median price/sqm (not actual rental yield)."
 SCREENING_DISCLAIMER = "Screening tool only — not underwriting, pricing, or investment advice."
 
-# Confidence thresholds (should match engine.py)
-RECO_MIN_N = 10
-CONF_HIGH = 20
-CONF_MED = 10
 
-
-# ----------------------------
+# ------------------------------------------------------------
 # Small helpers (shared)
-# ----------------------------
+# ------------------------------------------------------------
 def _now_utc_str() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -39,20 +39,19 @@ def _fmt_num(x: Any, decimals: int = 1) -> str:
         return "—"
 
 
-def _safe_slug(s: str) -> str:
-    return str(s).strip().lower().replace(" ", "_").replace("-", "_")
+def _fmt_int(x: Any) -> str:
+    try:
+        return f"{int(x)}"
+    except Exception:
+        return "—"
 
 
-def _confidence_label(n: int) -> str:
-    if n >= CONF_HIGH:
-        return "High"
-    if n >= CONF_MED:
-        return "Medium"
-    return "Low"
-
-
-def _can_recommend(n: int) -> bool:
-    return n >= RECO_MIN_N
+def _safe_str(x: Any) -> str:
+    try:
+        s = str(x)
+        return s if s.strip() else "—"
+    except Exception:
+        return "—"
 
 
 def _district_counts(df_all: pd.DataFrame, districts: list[str]) -> dict[str, int]:
@@ -81,7 +80,12 @@ def _footer_disclaimer(c: canvas.Canvas) -> None:
     c.drawString(40, 18, f"{BRAND} • {DATASET_NAME} {DATASET_VERSION} • {SCREENING_DISCLAIMER}")
 
 
-def _draw_data_provenance(c: canvas.Canvas, y: float, df_all: pd.DataFrame, districts: list[str]) -> float:
+def _draw_data_provenance(
+    c: canvas.Canvas,
+    y: float,
+    df_all: pd.DataFrame,
+    districts: list[str],
+) -> float:
     c.setFont("Helvetica-Bold", 12)
     c.drawString(40, y, "Data Provenance")
     y -= 18
@@ -95,7 +99,7 @@ def _draw_data_provenance(c: canvas.Canvas, y: float, df_all: pd.DataFrame, dist
     c.drawString(
         60,
         y,
-        f"Coverage — Marina: {counts.get('Marina',0)} | Business Bay: {counts.get('Business Bay',0)} | JVC: {counts.get('JVC',0)}",
+        f"Coverage — Marina: {counts.get('Marina', 0)} | Business Bay: {counts.get('Business Bay', 0)} | JVC: {counts.get('JVC', 0)}",
     )
     y -= 14
     c.drawString(60, y, "Refresh cadence: demo cache (TTL varies by page)")
@@ -110,7 +114,11 @@ def build_executive_memo_pdf(
     recommended: str,
     scores: dict[str, dict[str, float | int | str | bool]],
     scores_df: pd.DataFrame,
+    df_all: Optional[pd.DataFrame] = None,  # optional: keep call sites backward-compatible
+    districts: Optional[list[str]] = None,
 ) -> bytes:
+    districts = districts or ["Marina", "Business Bay", "JVC"]
+
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
@@ -118,13 +126,13 @@ def build_executive_memo_pdf(
     _draw_header(c, "Dubai Executive Memo")
 
     c.setFont("Helvetica", 10)
-    c.drawString(40, height - 140, f"Investor profile: {profile}")
+    c.drawString(40, height - 140, f"Investor profile: {_safe_str(profile)}")
 
     # Decision line (gated)
     rec = scores.get(recommended, {}) if recommended and recommended != "—" else {}
     n = int(rec.get("listings", 0)) if rec else 0
-    conf = str(rec.get("confidence", _confidence_label(n))) if rec else _confidence_label(n)
-    ok = bool(rec.get("can_recommend", _can_recommend(n))) if rec else False
+    conf = str(rec.get("confidence", confidence_label(n))) if rec else confidence_label(n)
+    ok = bool(rec.get("can_recommend", can_recommend(n))) if rec else False
 
     c.setFont("Helvetica-Bold", 12)
     c.drawString(40, height - 165, "Decision")
@@ -132,14 +140,14 @@ def build_executive_memo_pdf(
     c.setFont("Helvetica", 11)
     if recommended == "—" or not ok:
         c.drawString(60, height - 183, f"No recommendation (min {RECO_MIN_N} listings required).")
-        c.drawString(60, height - 199, f"Top candidate shown for transparency only.")
+        c.drawString(60, height - 199, "Top candidate shown for transparency only.")
     else:
         c.drawString(60, height - 183, f"Top pick: {recommended} for {profile} (screening).")
 
     c.setFont("Helvetica", 10)
     c.drawString(60, height - 215, f"Confidence: {conf}  |  Sample size (n): {n}")
 
-    # KPI snapshot (if we have a valid recommended)
+    # KPI snapshot
     y = height - 245
     c.setFont("Helvetica-Bold", 12)
     c.drawString(40, y, "KPI Snapshot (0–100)")
@@ -179,8 +187,7 @@ def build_executive_memo_pdf(
 
         best_adoption_other = float(other["adoption"].max()) if len(other) else None
         best_yield_other = float(other["yield"].max()) if len(other) else None
-        # risk: lower is safer but we DISPLAY raw; so best "safer" is min
-        safest_other = float(other["risk"].min()) if len(other) else None
+        safest_other = float(other["risk"].min()) if len(other) else None  # lower risk is safer
 
         rec_adoption = float(rec.get("adoption", 0.0) or 0.0)
         rec_yield = float(rec.get("yield", 0.0) or 0.0)
@@ -227,6 +234,11 @@ def build_executive_memo_pdf(
     for line in limitations:
         c.drawString(60, y, line)
         y -= 14
+
+    # Optional provenance (if df_all provided)
+    if df_all is not None and not df_all.empty:
+        y -= 10
+        _draw_data_provenance(c, y, df_all, districts)
 
     _footer_disclaimer(c)
     c.showPage()
@@ -305,7 +317,7 @@ def build_compare_memo_pdf(
     c.drawString(60, y, "This memo is descriptive for trade-off scanning, not underwriting / pricing.")
 
     y -= 26
-    y = _draw_data_provenance(c, y, df_all, districts)
+    _draw_data_provenance(c, y, df_all, districts)
 
     _footer_disclaimer(c)
     c.showPage()
@@ -340,8 +352,8 @@ def build_micro_memo_pdf(
     _draw_header(c, "Dubai Micro Memo")
 
     c.setFont("Helvetica", 10)
-    c.drawString(40, height - 140, f"Filters: District={district} | Bedrooms={bedrooms if bedrooms else 'All'}")
-    c.drawString(40, height - 155, f"Sample size: n={n} | Confidence={conf}")
+    c.drawString(40, height - 140, f"Filters: District={_safe_str(district)} | Bedrooms={bedrooms if bedrooms else 'All'}")
+    c.drawString(40, height - 155, f"Sample size: n={_fmt_int(n)} | Confidence={_safe_str(conf)}")
 
     y = height - 185
     c.setFont("Helvetica-Bold", 12)
@@ -383,7 +395,7 @@ def build_micro_memo_pdf(
     y -= 18
     c.setFont("Helvetica", 11)
 
-    if conf == "Low":
+    if str(conf).lower() == "low":
         c.drawString(60, y, "Low confidence under current filters — descriptive only (avoid strong calls).")
         y -= 16
     else:
@@ -399,7 +411,11 @@ def build_micro_memo_pdf(
             call_parts.append("unknown dispersion")
 
         if liq_local is not None:
-            call_parts.append("high liquidity (proxy)" if liq_local >= 70 else ("medium liquidity (proxy)" if liq_local >= 40 else "low liquidity (proxy)"))
+            call_parts.append(
+                "high liquidity (proxy)"
+                if liq_local >= 70
+                else ("medium liquidity (proxy)" if liq_local >= 40 else "low liquidity (proxy)")
+            )
         else:
             call_parts.append("unknown liquidity")
 
@@ -410,7 +426,7 @@ def build_micro_memo_pdf(
     c.drawString(60, y, "Micro read is local/descriptive and does not affect the Recommendation engine.")
 
     y -= 26
-    y = _draw_data_provenance(c, y, df_all, districts)
+    _draw_data_provenance(c, y, df_all, districts)
 
     _footer_disclaimer(c)
     c.showPage()
@@ -440,11 +456,11 @@ def build_recommendation_memo_pdf(
     _draw_header(c, "Dubai Recommendation Memo")
 
     c.setFont("Helvetica", 10)
-    c.drawString(40, height - 140, f"Investor profile: {profile}")
+    c.drawString(40, height - 140, f"Investor profile: {_safe_str(profile)}")
 
     n_listings = int(top_row.get("listings", 0)) if top_row is not None else 0
-    conf = str(top_row.get("confidence", _confidence_label(n_listings))) if top_row is not None else _confidence_label(n_listings)
-    ok = bool(top_row.get("can_recommend", _can_recommend(n_listings))) if top_row is not None else False
+    conf = str(top_row.get("confidence", confidence_label(n_listings))) if top_row is not None else confidence_label(n_listings)
+    ok = bool(top_row.get("can_recommend", can_recommend(n_listings))) if top_row is not None else False
 
     # Decision
     c.setFont("Helvetica-Bold", 12)
@@ -487,15 +503,15 @@ def build_recommendation_memo_pdf(
     y -= 18
     c.setFont("Helvetica", 11)
 
-    c.drawString(60, y, f"#1 Top-ranked: {str(top_row.get('district'))}")
+    c.drawString(60, y, f"#1 Top-ranked: {_safe_str(top_row.get('district'))}")
     y -= 16
 
     if fallback_row is not None:
-        c.drawString(60, y, f"#2 Fallback: {str(fallback_row.get('district'))}")
+        c.drawString(60, y, f"#2 Fallback: {_safe_str(fallback_row.get('district'))}")
         y -= 16
 
     if aggressive_row is not None:
-        c.drawString(60, y, f"#3 Upside option: {str(aggressive_row.get('district'))} (value proxy / yield-max)")
+        c.drawString(60, y, f"#3 Upside option: {_safe_str(aggressive_row.get('district'))} (value proxy / yield-max)")
         y -= 16
 
     # Limitations
@@ -516,7 +532,7 @@ def build_recommendation_memo_pdf(
         y -= 14
 
     y -= 10
-    y = _draw_data_provenance(c, y, df_all, districts)
+    _draw_data_provenance(c, y, df_all, districts)
 
     _footer_disclaimer(c)
     c.showPage()

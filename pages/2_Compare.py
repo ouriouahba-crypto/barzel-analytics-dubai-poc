@@ -9,8 +9,8 @@ from src.app.guardrails import require_non_empty, now_utc_str, district_counts, 
 from src.db.db import get_engine
 from src.processing.engine import compute_scores_df
 
-
 from src.app.ui import inject_base_ui, hero, metric_grid, pill
+
 inject_base_ui()
 
 DISTRICTS = ["Marina", "Business Bay", "JVC"]
@@ -27,14 +27,20 @@ def load_data() -> pd.DataFrame:
 def tradeoff_signal(row: pd.Series) -> float:
     """
     Trade-off score where higher is better.
-    We reward Yield Potential + Adoption Speed,
+    We reward Value proxy + Liquidity proxy,
     and we reward LOW risk by inverting it: (100 - risk).
     """
     y = float(row.get("Yield Potential", 0.0))
     a = float(row.get("Adoption Speed", 0.0))
     r = float(row.get("Risk Index", 0.0))  # higher = more risky
-    # weights are intentionally simple for demo
     return (0.45 * y) + (0.45 * a) + (0.10 * (100.0 - r))
+
+
+def _delta(a: float, b: float) -> float:
+    try:
+        return float(a) - float(b)
+    except Exception:
+        return 0.0
 
 
 df = load_data()
@@ -45,10 +51,10 @@ warn_low_coverage(df, "size_sqm", 0.60, "size_sqm")
 
 hero(
     "Compare",
-    "Yield vs Liquidity trade-off view (risk-aware screening).",
+    "IC-style trade-off view: Value proxy vs Liquidity proxy (risk-aware screening).",
     pills=[
         pill("Risk Index: higher = more risky", "warn"),
-        pill("Yield: value proxy", "warn"),
+        pill("Yield: value proxy (price/sqm)", "warn"),
         pill(f"Refresh: {now_utc_str()}", "good"),
     ],
 )
@@ -68,7 +74,6 @@ compare_df = scores_df.rename(
     }
 ).copy()
 
-# Keep only what we need + carry confidence signals
 keep_cols = ["District", "Yield Potential", "Adoption Speed", "Risk Index", "Barzel Score", "listings"]
 for extra in ["confidence", "can_recommend", "momentum", "depth"]:
     if extra in compare_df.columns:
@@ -79,10 +84,8 @@ compare_df = compare_df[keep_cols].copy()
 for ccol in ["Yield Potential", "Adoption Speed", "Risk Index", "Barzel Score"]:
     compare_df[ccol] = pd.to_numeric(compare_df[ccol], errors="coerce").fillna(0.0)
 
-# Trade-off signal (risk-aware)
 compare_df["Trade-off Score"] = compare_df.apply(tradeoff_signal, axis=1).round(1)
 
-# Rank: recommendable first, then by score
 if "can_recommend" in compare_df.columns:
     compare_df["_penalty"] = compare_df["can_recommend"].apply(lambda x: 0 if bool(x) else 1000)
 else:
@@ -90,8 +93,8 @@ else:
 
 ranked = compare_df.sort_values(["_penalty", "Trade-off Score"], ascending=[True, False]).copy()
 top = ranked.iloc[0]
+runner = ranked.iloc[1] if len(ranked) > 1 else None
 
-# Decision banner (gated)
 recommended = str(top["District"])
 can_reco = bool(top.get("can_recommend", True))
 conf = str(top.get("confidence", "—"))
@@ -105,8 +108,8 @@ if not can_reco:
     st.caption("We still show the trade-off view for transparency, but we do not output a decision under low coverage.")
 else:
     st.success(
-        f"Decision (trade-off screening): **{recommended}** offers the strongest Yield/Liquidity mix "
-        f"with risk-awareness (n={n}, confidence={conf})."
+        f"Trade-off pick (screening): **{recommended}** maximizes Value/Liquidity mix with risk-awareness "
+        f"(n={n}, confidence={conf})."
     )
 
 metric_grid(
@@ -120,9 +123,32 @@ metric_grid(
 
 st.caption(
     "Interpretation: higher is better for Yield Potential and Adoption Speed. "
-    "Risk Index is inverted inside the trade-off score (safer districts score higher)."
+    "Risk Index is inverted inside the trade-off score (safer districts rank higher)."
 )
 
+# -------------------------
+# IC-style trade-off summary
+# -------------------------
+st.divider()
+st.subheader("IC Trade-off Summary (memo-ready)")
+
+if runner is None:
+    st.write("Not enough alternatives to compute a meaningful trade-off summary.")
+else:
+    dy = _delta(float(top["Yield Potential"]), float(runner["Yield Potential"]))
+    da = _delta(float(top["Adoption Speed"]), float(runner["Adoption Speed"]))
+    dr = _delta(float(top["Risk Index"]), float(runner["Risk Index"]))  # positive means riskier
+
+    st.markdown(f"**#1:** {top['District']}  \n**#2:** {runner['District']}")
+    st.write(f"• **Value proxy (price/sqm)**: {top['District']} = **{top['Yield Potential']:.1f}** vs {runner['District']} = **{runner['Yield Potential']:.1f}** (Δ {dy:+.1f})")
+    st.write(f"• **Liquidity proxy (Adoption Speed)**: {top['District']} = **{top['Adoption Speed']:.1f}** vs {runner['District']} = **{runner['Adoption Speed']:.1f}** (Δ {da:+.1f})")
+    st.write(f"• **Risk (dispersion)**: {top['District']} = **{top['Risk Index']:.1f}** vs {runner['District']} = **{runner['Risk Index']:.1f}** (Δ {dr:+.1f}; higher = more risky)")
+
+    st.caption("This summary is for screening and IC discussion, not underwriting.")
+
+# -------------------------
+# Plot
+# -------------------------
 fig = px.scatter(
     compare_df,
     x="Adoption Speed",
@@ -131,7 +157,7 @@ fig = px.scatter(
     color="District",
     hover_name="District",
     size_max=60,
-    title="Yield Potential (Value proxy) vs Adoption Speed (Liquidity proxy)",
+    title="Value Proxy (price/sqm) vs Liquidity Proxy (Adoption Speed)",
 )
 
 fig.update_layout(
@@ -143,12 +169,15 @@ fig.update_layout(
 )
 
 st.plotly_chart(fig, use_container_width=True)
-st.caption("Each point represents a district. Upper-right suggests stronger yield potential with faster absorption (proxy).")
+st.caption("Upper-right suggests stronger value proxy with faster absorption (proxy).")
 
 st.subheader("KPI Comparison")
 display_df = compare_df.drop(columns=["_penalty"]).set_index("District")
 st.dataframe(display_df, use_container_width=True)
 
+# -------------------------
+# Data provenance + Export
+# -------------------------
 st.divider()
 st.markdown("### Data provenance")
 counts = district_counts(df, DISTRICTS)

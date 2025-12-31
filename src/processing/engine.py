@@ -24,15 +24,17 @@ class ConfidenceRule:
     min_n: int
     label: str
 
-# Targeting credibility at ~20 listings/district:
+
+# Consistent across app + PDFs:
+# High >= 20, Medium >= 10, else Low
 CONFIDENCE_RULES: Tuple[ConfidenceRule, ...] = (
     ConfidenceRule(min_n=20, label="High"),
-    ConfidenceRule(min_n=12, label="Medium"),
+    ConfidenceRule(min_n=10, label="Medium"),
     ConfidenceRule(min_n=0, label="Low"),
 )
 
-# Recommendation should be blocked when the sample is clearly too small
-RECO_MIN_N = 15
+# Recommendation gate: minimum credible sample size
+RECO_MIN_N = 10
 
 
 def confidence_label(n: int) -> str:
@@ -84,12 +86,11 @@ def compute_scores_for_district(df_all: pd.DataFrame, district: str) -> Dict:
     ddf = df_all[df_all["district"] == district].copy()
     n = int(len(ddf))
 
-    # Normalize across districts using df_all wherever meaningful
-    liq = _as_score(adoption_speed_score(ddf, df_all))          # uses median DOM per district
-    yld = _as_score(yield_potential_score(ddf, df_all))         # uses median ppsqm per district
-    risk = _as_score(risk_index_score(ddf, df_all))             # composite dispersion + ticket, normalized
-    mom = _as_score(momentum_score(ddf, df_all))                # recent vs old ppsqm, normalized
-    depth = _as_score(market_depth_score(ddf))                  # saturates around 20+
+    liq = _as_score(adoption_speed_score(ddf, df_all))          # DOM-based liquidity proxy
+    yld = _as_score(yield_potential_score(ddf, df_all))         # price/sqm value proxy (NOT rental yield)
+    risk = _as_score(risk_index_score(ddf, df_all))             # dispersion + ticket, normalized
+    mom = _as_score(momentum_score(ddf, df_all))                # recency proxy
+    depth = _as_score(market_depth_score(ddf))                  # coverage proxy
 
     total = _as_score(barzel_score(yld, liq, risk, mom, depth))
 
