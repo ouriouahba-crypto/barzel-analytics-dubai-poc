@@ -84,6 +84,13 @@ if "bedrooms" in df_all.columns:
 
 bedrooms = st.sidebar.multiselect("Bedrooms", bedroom_options)
 
+# Map color settings (simple + useful)
+st.sidebar.divider()
+st.sidebar.subheader("Map color")
+cap_quantiles = st.sidebar.checkbox("Stabilize colors (cap 5%–95%)", value=True)
+# Red = expensive (default): YlOrRd (yellow low -> red high)
+reverse_scale = st.sidebar.checkbox("Reverse scale (red = cheaper)", value=False)
+
 df = df_all.copy()
 if district != "All" and "district" in df.columns:
     df = df[df["district"] == district]
@@ -138,6 +145,7 @@ if not ppsqm_local.empty and not g_ppsqm.empty:
     local_median = float(ppsqm_local.median())
     pct_val = float((g_ppsqm <= local_median).mean() * 100.0)
 
+
 def pricing_level_call(pct: float | None) -> str:
     if pct is None:
         return "pricing level: unknown"
@@ -146,6 +154,7 @@ def pricing_level_call(pct: float | None) -> str:
     if pct >= 40:
         return "pricing level: mid-market"
     return "pricing level: value"
+
 
 def dispersion_call(iqr: float | None, _qg: dict | None) -> str:
     if iqr is None:
@@ -156,6 +165,7 @@ def dispersion_call(iqr: float | None, _qg: dict | None) -> str:
         return "dispersion: moderate"
     return "dispersion: wide"
 
+
 def liquidity_call(liq: float | None) -> str:
     if liq is None:
         return "liquidity: unknown"
@@ -164,6 +174,7 @@ def liquidity_call(liq: float | None) -> str:
     if liq >= 40:
         return "liquidity: medium (proxy)"
     return "liquidity: low (proxy)"
+
 
 micro_call = [pricing_level_call(pct_val), dispersion_call(iqr_val, q_global), liquidity_call(liq_local)]
 
@@ -190,27 +201,55 @@ else:
             mask = map_df["price"].notna() & map_df["size_sqm"].notna() & (map_df["size_sqm"] > 0)
             map_df.loc[mask, "price_per_sqm"] = map_df.loc[mask, "price"] / map_df.loc[mask, "size_sqm"]
 
+        # ---- Color stabilization (prevents outliers from ruining the scale)
+        valid_ppsqm = map_df["price_per_sqm"].replace([np.inf, -np.inf], np.nan).dropna()
+
+        lo, hi = None, None
+        if not valid_ppsqm.empty:
+            if cap_quantiles:
+                lo = float(valid_ppsqm.quantile(0.05))
+                hi = float(valid_ppsqm.quantile(0.95))
+            else:
+                lo = float(valid_ppsqm.min())
+                hi = float(valid_ppsqm.max())
+
+        map_df["price_per_sqm_capped"] = map_df["price_per_sqm"]
+        if lo is not None and hi is not None and np.isfinite(lo) and np.isfinite(hi) and hi > lo:
+            map_df["price_per_sqm_capped"] = map_df["price_per_sqm"].clip(lower=lo, upper=hi)
+
+        # ---- Color scale (yellow -> red), option to reverse
+        scale = px.colors.sequential.YlOrRd
+        if reverse_scale:
+            scale = list(reversed(scale))
+
         fig = px.scatter_mapbox(
             map_df,
             lat="latitude",
             lon="longitude",
-            color="price_per_sqm",
+            color="price_per_sqm_capped",
+            color_continuous_scale=scale,
+            range_color=(lo, hi) if (lo is not None and hi is not None and hi > lo) else None,
             hover_name="district" if "district" in map_df.columns else None,
             hover_data={
                 "price": "price" in map_df.columns,
                 "size_sqm": "size_sqm" in map_df.columns,
                 "bedrooms": "bedrooms" in map_df.columns,
-                "price_per_sqm": True,
+                "price_per_sqm": True,            # ✅ true value
+                "price_per_sqm_capped": False,    # hide internal cap column
                 "latitude": False,
                 "longitude": False,
             },
             zoom=11,
             height=520,
         )
-        fig.update_layout(mapbox_style="open-street-map", margin=dict(l=0, r=0, t=0, b=0))
+        fig.update_layout(
+            mapbox_style="open-street-map",
+            margin=dict(l=0, r=0, t=0, b=0),
+            coloraxis_colorbar=dict(title="AED / sqm"),
+        )
         st.plotly_chart(fig, use_container_width=True)
 
-st.caption("Map color = price per sqm (value / premium proxy).")
+st.caption("Map color = price per sqm (value / premium proxy). Colors are stabilized to avoid outlier distortion.")
 
 # -------------------------
 # Snapshot
@@ -236,8 +275,8 @@ else:
     if price_series.empty:
         st.info("No valid price values available.")
     else:
-        lo, hi = price_series.quantile([0.02, 0.98])
-        clipped = price_series.clip(lower=float(lo), upper=float(hi))
+        lo_h, hi_h = price_series.quantile([0.02, 0.98])
+        clipped = price_series.clip(lower=float(lo_h), upper=float(hi_h))
         hist = px.histogram(
             clipped,
             nbins=30,
