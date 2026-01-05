@@ -1,7 +1,23 @@
+# .streamlit/config.toml
+
 [theme]
-base="dark"
-primaryColor="#7aa2ff"
-backgroundColor="#0b1220"
-secondaryBackgroundColor="#111a2b"
-textColor="#e8eefc"
-font="sans serif"
+base = "light"
+
+# Brand accent (buttons, highlights)
+primaryColor = "#0EA5A4"  # teal
+
+# App background + surfaces
+backgroundColor = "#F6F8FB"
+secondaryBackgroundColor = "#FFFFFF"
+
+# Text + fonts
+textColor = "#0F172A"
+font = "sans serif"
+
+[client]
+showErrorDetails = false
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = true
