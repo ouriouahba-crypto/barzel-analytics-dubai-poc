@@ -44,6 +44,7 @@ profile = st.selectbox(
 hero(
     "PDF Memo Builder",
     "Generate a committee-style memo as a PDF. The dashboard UI stays analysis-only (no on-screen conclusion).",
+
     pills=[
         pill(f"Profile: {profile}", "good"),
         pill("Screening, not underwriting", "warn"),
@@ -55,13 +56,14 @@ hero(
 st.caption(
     "This page does **not** display a recommendation on screen. "
     "The memo PDF contains the Barzel synthesis and rationale (for committee-style discussion)."
+
 )
 
 # Internal scoring (hidden from UI)
 scores_df = compute_scores_df(df_all, DISTRICTS)
 ranking = rank_for_profile(scores_df, profile=profile)
 
-reco = pick_recommendation(ranking)
+reco = pick_recommendation(scores_df, profile=profile)
 
 # Show only coverage / credibility status (no district named)
 top_n = int(ranking.iloc[0]["listings"]) if ranking is not None and not ranking.empty and "listings" in ranking.columns else 0

@@ -75,24 +75,35 @@ def _draw_header(c: canvas.Canvas, title: str) -> None:
     c.drawString(40, height - 115, f"{RISK_CONVENTION}  |  {YIELD_CONVENTION}")
 
 
-def _footer_disclaimer(c: canvas.Canvas) -> None:
+def _footer_disclaimer(c: canvas.Canvas, *args, **kwargs) -> None:
     c.setFont("Helvetica", 8)
     c.drawString(40, 18, f"{BRAND} • {DATASET_NAME} {DATASET_VERSION} • {SCREENING_DISCLAIMER}")
 
 
 def _draw_data_provenance(
     c: canvas.Canvas,
-    y: float,
-    df_all: pd.DataFrame,
-    districts: list[str],
+    y: float | None = None,
+    df_all: pd.DataFrame | None = None,
+    districts: list[str] | None = None,
 ) -> float:
+    """Draw a small provenance block and return the next y position.
+
+    Backward-compatible:
+    - Some callers pass (c, df_all=..., districts=...) without y.
+    - Some callers pass (c, y, df_all, districts).
+    """
+    _, height = A4
+    if y is None:
+        y = height - 140
+    districts = districts or ["Marina", "Business Bay", "JVC"]
+
     c.setFont("Helvetica-Bold", 12)
     c.drawString(40, y, "Data Provenance")
     y -= 18
     c.setFont("Helvetica", 10)
 
     total = len(df_all) if df_all is not None else 0
-    counts = _district_counts(df_all, districts)
+    counts = _district_counts(df_all, districts) if df_all is not None else {d: 0 for d in districts}
 
     c.drawString(60, y, f"Total listings: {total}")
     y -= 14
