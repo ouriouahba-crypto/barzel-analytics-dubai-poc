@@ -14,7 +14,10 @@ from src.app.guardrails import (
     warn_low_sample,
 )
 from src.processing.kpis import adoption_speed_score
+from src.processing.metrics import add_derived_columns
 from src.db.db import get_engine
+
+from src.app.charts import apply_premium_layout
 
 from src.app.ui import inject_base_ui, hero, metric_grid, pill
 
@@ -96,6 +99,10 @@ if district != "All" and "district" in df.columns:
     df = df[df["district"] == district]
 if bedrooms and "bedrooms" in df.columns:
     df = df[df["bedrooms"].isin(bedrooms)]
+
+# Add standard derived columns (price_per_sqm, days_active if available)
+df = add_derived_columns(df)
+df_all_derived = add_derived_columns(df_all)
 
 n = int(len(df))
 conf = _confidence_bucket(n)
@@ -280,13 +287,89 @@ else:
         hist = px.histogram(
             clipped,
             nbins=30,
-            title="Histogram of Prices (winsorized 2%–98%)",
+            marginal="box",
             labels={"value": "Price (AED)", "count": "Listings"},
         )
-        hist.update_layout(margin=dict(l=0, r=0, t=50, b=0))
+        hist = apply_premium_layout(hist, title="Prices (AED) — histogram (winsorized 2%–98%)", height=360)
+        hist.update_layout(xaxis_title="Price (AED)", yaxis_title="Listings")
         st.plotly_chart(hist, use_container_width=True)
 
 st.caption("Histogram is winsorized (2%–98%) to reduce outlier impact.")
+
+# -------------------------
+# Extra views (more "wow" visuals)
+# -------------------------
+st.subheader("Extra views")
+tab1, tab2, tab3 = st.tabs(["Price/sqm", "Size & value", "Time on market"])
+
+with tab1:
+    if "price_per_sqm" in df.columns and df["price_per_sqm"].notna().any():
+        x_col = "district" if district == "All" else "bedrooms"
+        if x_col == "bedrooms" and "bedrooms" not in df.columns:
+            x_col = "district"
+
+        fig = px.violin(
+            df.dropna(subset=["price_per_sqm", x_col]),
+            x=x_col,
+            y="price_per_sqm",
+            box=True,
+            points="outliers",
+            color="district" if district == "All" else None,
+        )
+        fig = apply_premium_layout(fig, title="Price per sqm distribution", height=380)
+        fig.update_layout(xaxis_title=x_col.replace("_", " ").title(), yaxis_title="AED per sqm")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No price_per_sqm available (need both price and size_sqm).")
+
+with tab2:
+    if {"price", "size_sqm"}.issubset(set(df.columns)) and not df.dropna(subset=["price", "size_sqm"]).empty:
+        fig = px.scatter(
+            df.dropna(subset=["price", "size_sqm"]),
+            x="size_sqm",
+            y="price",
+            color="district" if district == "All" else None,
+            hover_data=[c for c in ["bedrooms", "price_per_sqm", "days_active"] if c in df.columns],
+        )
+        fig = apply_premium_layout(fig, title="Price vs size (scatter)", height=420)
+        fig.update_layout(xaxis_title="Size (sqm)", yaxis_title="Price (AED)")
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Density view reveals clusters/outliers clearly
+        if "price_per_sqm" in df.columns and df["price_per_sqm"].notna().any():
+            fig2 = px.density_heatmap(
+                df.dropna(subset=["size_sqm", "price_per_sqm"]),
+                x="size_sqm",
+                y="price_per_sqm",
+                nbinsx=25,
+                nbinsy=25,
+            )
+            fig2 = apply_premium_layout(fig2, title="Density: size vs price/sqm", height=380)
+            fig2.update_layout(xaxis_title="Size (sqm)", yaxis_title="AED per sqm")
+            st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("Need price + size_sqm to show size/value charts.")
+
+with tab3:
+    if "days_active" in df.columns and df["days_active"].notna().any():
+        fig = px.ecdf(df.dropna(subset=["days_active"]), x="days_active", color="district" if district == "All" else None)
+        fig = apply_premium_layout(fig, title="ECDF — days active", height=360)
+        fig.update_layout(xaxis_title="Days active", yaxis_title="Cumulative share")
+        st.plotly_chart(fig, use_container_width=True)
+
+        if "price_per_sqm" in df.columns and df["price_per_sqm"].notna().any():
+            fig2 = px.scatter(
+                df.dropna(subset=["days_active", "price_per_sqm"]),
+                x="days_active",
+                y="price_per_sqm",
+                color="district" if district == "All" else None,
+                hover_data=[c for c in ["price", "size_sqm", "bedrooms"] if c in df.columns],
+            )
+            fig2 = apply_premium_layout(fig2, title="Time on market vs price/sqm", height=420)
+            fig2.update_layout(xaxis_title="Days active", yaxis_title="AED per sqm")
+            st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("No days_active available yet. Add first_seen/last_seen to compute a proper time-on-market proxy.")
 
 # -------------------------
 # Micro signals

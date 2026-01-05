@@ -1,12 +1,15 @@
 # pages/4_Recommendation.py
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 from sqlalchemy import text
 
 from src.app.pdf import build_recommendation_memo_pdf
 from src.app.guardrails import require_non_empty, now_utc_str, district_counts, warn_low_coverage
 from src.db.db import get_engine
 from src.processing.engine import compute_scores_df, rank_for_profile, pick_recommendation
+from src.processing.metrics import add_derived_columns
+from src.app.charts import apply_premium_layout, add_value_labels_bar
 
 from src.app.ui import inject_base_ui, hero, metric_grid, pill
 
@@ -78,6 +81,37 @@ metric_grid(
         ("Scope", "Marina / Business Bay / JVC", "This demo scope is fixed"),
     ]
 )
+
+# --- Premium visuals (analysis only). No winner, no recommendation on-screen.
+st.subheader("Quick visuals (analysis-only)")
+df_v = add_derived_columns(df_all)
+
+c1, c2 = st.columns(2)
+with c1:
+    # Simple market coverage by district
+    counts_df = pd.DataFrame(
+        {"District": list(counts.keys()), "Listings": list(counts.values())}
+    )
+    fig = px.bar(counts_df, x="District", y="Listings")
+    fig = apply_premium_layout(fig, title="Coverage (listings) by district", height=320)
+    fig.update_layout(xaxis_title="District", yaxis_title="Listings")
+    fig = add_value_labels_bar(fig)
+    st.plotly_chart(fig, use_container_width=True)
+
+with c2:
+    if "price_per_sqm" in df_v.columns and df_v["price_per_sqm"].notna().any():
+        fig2 = px.violin(
+            df_v.dropna(subset=["price_per_sqm", "district"]),
+            x="district",
+            y="price_per_sqm",
+            box=True,
+            points="outliers",
+        )
+        fig2 = apply_premium_layout(fig2, title="Price per sqm distribution (AED/sqm)", height=320)
+        fig2.update_layout(xaxis_title="District", yaxis_title="AED per sqm")
+        st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("No price_per_sqm available (need both price and size_sqm).")
 
 st.divider()
 st.markdown("### Export investment memo (PDF)")

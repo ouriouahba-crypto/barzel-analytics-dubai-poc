@@ -24,7 +24,7 @@ def inject_base_ui() -> None:
 }
 
 section.main > div { padding-top: 1.2rem; }
-.block-container { max-width: 1180px; }
+.block-container { max-width: 1380px; }
 
 #MainMenu { visibility: hidden; }
 footer { visibility: hidden; }
@@ -85,6 +85,19 @@ footer { visibility: hidden; }
 }
 
 hr { border-top: 1px solid rgba(255,255,255,0.10); }
+
+/* Make Plotly charts feel like premium cards */
+[data-testid="stPlotlyChart"] {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 16px;
+  padding: 10px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.22);
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.02em;
+}
 </style>
         """,
         unsafe_allow_html=True,
