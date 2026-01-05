@@ -117,7 +117,7 @@ st.caption(
 )
 
 st.info(
-    "Purpose: this page is **not** the decision engine. "
+    "Purpose: this page is **analysis-only**. "
     "It is a **micro sanity-check** to detect outliers and distribution issues before moving to underwriting."
 )
 
@@ -343,7 +343,7 @@ if district == "All":
 else:
     st.write(f"• Liquidity proxy for **{district}** is **{micro_call[2].split(': ')[1]}** (Adoption Speed {liq_display}).")
 
-st.caption("Micro Summary is descriptive only and does not drive the Recommendation engine.")
+st.caption("Micro Summary is descriptive only and does not generate any on-screen recommendation.")
 
 # -------------------------
 # Data provenance + Export

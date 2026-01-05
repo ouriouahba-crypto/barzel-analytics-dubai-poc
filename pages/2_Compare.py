@@ -5,11 +5,11 @@ import plotly.express as px
 from sqlalchemy import text
 
 from src.app.pdf import build_compare_memo_pdf
-from src.app.guardrails import require_non_empty, now_utc_str, district_counts, warn_low_coverage
+from src.app.guardrails import require_non_empty, now_utc_str, district_counts
 from src.db.db import get_engine
-from src.processing.engine import compute_scores_df
+from src.processing.metrics import district_basic_metrics, format_metrics_table, add_derived_columns
 
-from src.app.ui import inject_base_ui, hero, metric_grid, pill
+from src.app.ui import inject_base_ui, hero, pill
 
 inject_base_ui()
 
@@ -21,184 +21,77 @@ def load_data() -> pd.DataFrame:
     engine = get_engine()
     with engine.connect() as conn:
         df = pd.read_sql(text("SELECT * FROM listings"), conn)
+
+    for col in ["price", "size_sqm", "bedrooms", "latitude", "longitude"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
 
-def tradeoff_signal(row: pd.Series) -> float:
-    """
-    Trade-off score where higher is better.
-    We reward Value proxy + Liquidity proxy,
-    and we reward LOW risk by inverting it: (100 - risk).
-    """
-    y = float(row.get("Yield Potential", 0.0))
-    a = float(row.get("Adoption Speed", 0.0))
-    r = float(row.get("Risk Index", 0.0))  # higher = more risky
-    return (0.45 * y) + (0.45 * a) + (0.10 * (100.0 - r))
+df_all = load_data()
+require_non_empty(df_all, "listings")
 
-
-def _delta(a: float, b: float) -> float:
-    try:
-        return float(a) - float(b)
-    except Exception:
-        return 0.0
-
-
-df = load_data()
-require_non_empty(df, "listings")
-
-warn_low_coverage(df, "price", 0.70, "price")
-warn_low_coverage(df, "size_sqm", 0.60, "size_sqm")
-
+counts = district_counts(df_all, DISTRICTS)
 hero(
     "Compare",
-    "IC-style trade-off view: Value proxy vs Liquidity proxy (risk-aware screening).",
+    "Side-by-side analytics across districts (analysis-only).",
     pills=[
-        pill("Risk Index: higher = more risky", "warn"),
-        pill("Yield: value proxy (price/sqm)", "warn"),
-        pill(f"Refresh: {now_utc_str()}", "good"),
+        pill(f"Marina: {counts.get('Marina', 0)}", "good"),
+        pill(f"Business Bay: {counts.get('Business Bay', 0)}", "good"),
+        pill(f"JVC: {counts.get('JVC', 0)}", "good"),
+        pill(f"Refresh: {now_utc_str()}", "warn"),
     ],
 )
 
-scores_df = compute_scores_df(df, districts=DISTRICTS)
-if scores_df is None or scores_df.empty:
-    st.error("Scores could not be computed. Check numeric columns (price, size_sqm, timestamps).")
-    st.stop()
+metrics_raw = district_basic_metrics(df_all, DISTRICTS)
+metrics_view = format_metrics_table(metrics_raw)
 
-compare_df = scores_df.rename(
-    columns={
-        "district": "District",
-        "yield": "Yield Potential",
-        "adoption": "Adoption Speed",
-        "risk": "Risk Index",
-        "barzel": "Barzel Score",
-    }
-).copy()
+st.subheader("Metrics table")
+st.dataframe(metrics_view, use_container_width=True, hide_index=True)
 
-keep_cols = ["District", "Yield Potential", "Adoption Speed", "Risk Index", "Barzel Score", "listings"]
-for extra in ["confidence", "can_recommend", "momentum", "depth"]:
-    if extra in compare_df.columns:
-        keep_cols.append(extra)
+df = add_derived_columns(df_all)
 
-compare_df = compare_df[keep_cols].copy()
+st.subheader("Charts")
 
-for ccol in ["Yield Potential", "Adoption Speed", "Risk Index", "Barzel Score"]:
-    compare_df[ccol] = pd.to_numeric(compare_df[ccol], errors="coerce").fillna(0.0)
-
-compare_df["Trade-off Score"] = compare_df.apply(tradeoff_signal, axis=1).round(1)
-
-if "can_recommend" in compare_df.columns:
-    compare_df["_penalty"] = compare_df["can_recommend"].apply(lambda x: 0 if bool(x) else 1000)
-else:
-    compare_df["_penalty"] = 0
-
-ranked = compare_df.sort_values(["_penalty", "Trade-off Score"], ascending=[True, False]).copy()
-top = ranked.iloc[0]
-runner = ranked.iloc[1] if len(ranked) > 1 else None
-
-recommended = str(top["District"])
-can_reco = bool(top.get("can_recommend", True))
-conf = str(top.get("confidence", "—"))
-n = int(top.get("listings", 0))
-
-if not can_reco:
-    st.warning(
-        f"No recommendation: insufficient coverage (min listings required). "
-        f"Top candidate by trade-off score is **{recommended}** (n={n}, confidence={conf})."
+c1, c2 = st.columns(2)
+with c1:
+    fig = px.bar(
+        metrics_raw,
+        x="District",
+        y="Weighted Price/sqm (AED)",
+        title="Weighted price per sqm (AED/sqm)",
     )
-    st.caption("We still show the trade-off view for transparency, but we do not output a decision under low coverage.")
-else:
-    st.success(
-        f"Trade-off pick (screening): **{recommended}** maximizes Value/Liquidity mix with risk-awareness "
-        f"(n={n}, confidence={conf})."
+    fig.update_layout(yaxis_title="AED per sqm")
+    st.plotly_chart(fig, use_container_width=True)
+
+with c2:
+    fig2 = px.bar(
+        metrics_raw,
+        x="District",
+        y="Median Days Active",
+        title="Median Days Active (listing lifetime proxy)",
     )
+    fig2.update_layout(yaxis_title="Days")
+    st.plotly_chart(fig2, use_container_width=True)
 
-metric_grid(
-    [
-        ("Top candidate", recommended, "Trade-off score ranking"),
-        ("Yield Potential", f"{float(top['Yield Potential']):.1f}", "Value proxy (price/sqm)"),
-        ("Adoption Speed", f"{float(top['Adoption Speed']):.1f}", "Liquidity proxy"),
-        ("Risk Index", f"{float(top['Risk Index']):.1f}", "Higher = more dispersion (more risk)"),
-    ]
+fig3 = px.box(
+    df.dropna(subset=["price_per_sqm"]),
+    x="district",
+    y="price_per_sqm",
+    points="outliers",
+    title="Price per sqm distribution by district (AED/sqm)",
 )
-
-st.caption(
-    "Interpretation: higher is better for Yield Potential and Adoption Speed. "
-    "Risk Index is inverted inside the trade-off score (safer districts rank higher)."
-)
-
-# -------------------------
-# IC-style trade-off summary
-# -------------------------
-st.divider()
-st.subheader("IC Trade-off Summary (memo-ready)")
-
-if runner is None:
-    st.write("Not enough alternatives to compute a meaningful trade-off summary.")
-else:
-    dy = _delta(float(top["Yield Potential"]), float(runner["Yield Potential"]))
-    da = _delta(float(top["Adoption Speed"]), float(runner["Adoption Speed"]))
-    dr = _delta(float(top["Risk Index"]), float(runner["Risk Index"]))  # positive means riskier
-
-    st.markdown(f"**#1:** {top['District']}  \n**#2:** {runner['District']}")
-    st.write(f"• **Value proxy (price/sqm)**: {top['District']} = **{top['Yield Potential']:.1f}** vs {runner['District']} = **{runner['Yield Potential']:.1f}** (Δ {dy:+.1f})")
-    st.write(f"• **Liquidity proxy (Adoption Speed)**: {top['District']} = **{top['Adoption Speed']:.1f}** vs {runner['District']} = **{runner['Adoption Speed']:.1f}** (Δ {da:+.1f})")
-    st.write(f"• **Risk (dispersion)**: {top['District']} = **{top['Risk Index']:.1f}** vs {runner['District']} = **{runner['Risk Index']:.1f}** (Δ {dr:+.1f}; higher = more risky)")
-
-    st.caption("This summary is for screening and IC discussion, not underwriting.")
-
-# -------------------------
-# Plot
-# -------------------------
-fig = px.scatter(
-    compare_df,
-    x="Adoption Speed",
-    y="Yield Potential",
-    size="Barzel Score",
-    color="District",
-    hover_name="District",
-    size_max=60,
-    title="Value Proxy (price/sqm) vs Liquidity Proxy (Adoption Speed)",
-)
-
-fig.update_layout(
-    xaxis_title="Adoption Speed (Liquidity proxy)",
-    yaxis_title="Yield Potential (Value proxy)",
-    legend_title_text="District",
-    xaxis=dict(range=[0, 100]),
-    yaxis=dict(range=[0, 100]),
-)
-
-st.plotly_chart(fig, use_container_width=True)
-st.caption("Upper-right suggests stronger value proxy with faster absorption (proxy).")
-
-st.subheader("KPI Comparison")
-display_df = compare_df.drop(columns=["_penalty"]).set_index("District")
-st.dataframe(display_df, use_container_width=True)
-
-# -------------------------
-# Data provenance + Export
-# -------------------------
-st.divider()
-st.markdown("### Data provenance")
-counts = district_counts(df, DISTRICTS)
-st.caption(
-    f"Data refreshed: **{now_utc_str()}** · Total listings: **{len(df)}** · "
-    f"Marina: **{counts['Marina']}** | Business Bay: **{counts['Business Bay']}** | JVC: **{counts['JVC']}**"
-)
+fig3.update_layout(xaxis_title="District", yaxis_title="AED per sqm")
+st.plotly_chart(fig3, use_container_width=True)
 
 st.divider()
 st.markdown("### Export")
+st.caption("Download a 1-page compare memo (analysis-only).")
 
-pdf_bytes = build_compare_memo_pdf(
-    compare_df=compare_df.drop(columns=["_penalty"]),
-    recommended=recommended if can_reco else "—",
-    df_all=df,
-)
-
-safe_reco = (recommended if can_reco else "no_reco").lower().replace(" ", "_").replace("-", "_")
+pdf_bytes = build_compare_memo_pdf(metrics_df=metrics_raw, df_all=df_all, districts=DISTRICTS)
 st.download_button(
-    label="📄 Download 1-page Compare Memo (PDF)",
+    "Download Compare Memo (PDF)",
     data=pdf_bytes,
-    file_name=f"barzel_compare_memo_{safe_reco}.pdf",
+    file_name="barzel_compare_memo.pdf",
     mime="application/pdf",
 )

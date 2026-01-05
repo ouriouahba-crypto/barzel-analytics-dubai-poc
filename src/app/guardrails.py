@@ -51,14 +51,14 @@ def confidence_label(n: int) -> str:
 
 
 def can_recommend(n: int) -> bool:
-    """Hard gate: do not output decisions under this threshold."""
+    """Hard gate: do not output a memo conclusion under this threshold."""
     return n >= RECO_MIN_N
 
 
 def warn_low_sample(n: int, label: str = "Sample size") -> str:
     """
     Returns a confidence label and emits a warning/info when needed.
-    Uses the same thresholds as the recommendation engine.
+    Uses the same thresholds as the memo gating logic.
     """
     conf = confidence_label(n)
 

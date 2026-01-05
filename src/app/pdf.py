@@ -110,152 +110,97 @@ def _draw_data_provenance(
 # 1) Executive Snapshot memo
 # ============================================================
 def build_executive_memo_pdf(
-    profile: str,
-    recommended: str,
-    scores: dict[str, dict[str, float | int | str | bool]],
-    scores_df: pd.DataFrame,
-    df_all: Optional[pd.DataFrame] = None,  # optional: keep call sites backward-compatible
+    metrics_df: pd.DataFrame,
+    df_all: pd.DataFrame,
     districts: Optional[list[str]] = None,
 ) -> bytes:
+    """One-page *analytical* executive summary (no recommendation on the document).
+
+    This memo is meant to be:
+    - descriptive
+    - defensible
+    - compliant-friendly (screening view)
+    """
     districts = districts or ["Marina", "Business Bay", "JVC"]
 
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    _draw_header(c, "Dubai Executive Memo")
+    _draw_header(c, "Dubai Executive Data Summary")
 
-    c.setFont("Helvetica", 10)
-    c.drawString(40, height - 140, f"Investor profile: {_safe_str(profile)}")
+    # Provenance
+    _draw_data_provenance(c, df_all=df_all, districts=districts)
 
-    # Decision line (gated)
-    rec = scores.get(recommended, {}) if recommended and recommended != "—" else {}
-    n = int(rec.get("listings", 0)) if rec else 0
-    conf = str(rec.get("confidence", confidence_label(n))) if rec else confidence_label(n)
-    ok = bool(rec.get("can_recommend", can_recommend(n))) if rec else False
-
+    # Key metrics table (compact)
+    y = height - 220
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, height - 165, "Decision")
-
-    c.setFont("Helvetica", 11)
-    if recommended == "—" or not ok:
-        c.drawString(60, height - 183, f"No recommendation (min {RECO_MIN_N} listings required).")
-        c.drawString(60, height - 199, "Top candidate shown for transparency only.")
-    else:
-        c.drawString(60, height - 183, f"Top pick: {recommended} for {profile} (screening).")
-
-    c.setFont("Helvetica", 10)
-    c.drawString(60, height - 215, f"Confidence: {conf}  |  Sample size (n): {n}")
-
-    # KPI snapshot
-    y = height - 245
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "KPI Snapshot (0–100)")
+    c.drawString(40, y, "Key Metrics (Listings dataset)")
     y -= 18
-    c.setFont("Helvetica", 11)
 
-    if not rec:
-        c.drawString(60, y, "No KPI snapshot available (no recommendation).")
-        y -= 16
+    c.setFont("Helvetica", 9)
+    cols = [
+        ("District", 40),
+        ("Listings", 140),
+        ("Weighted AED/sqm", 200),
+        ("Median AED/sqm", 310),
+        ("Median Days Active", 410),
+    ]
+    # header
+    for label, x in cols:
+        c.drawString(x, y, label)
+    y -= 12
+
+    # rows
+    if metrics_df is None or metrics_df.empty:
+        rows = []
     else:
-        lines = [
-            f"Barzel Score: {_fmt_num(rec.get('barzel'))}/100",
-            f"Adoption Speed (Liquidity proxy): {_fmt_num(rec.get('adoption'))}",
-            f"Yield Potential (Value proxy): {_fmt_num(rec.get('yield'))}",
-            f"Risk Index (Dispersion proxy): {_fmt_num(rec.get('risk'))}  (higher = more risky)",
-            f"Momentum (Recency proxy): {_fmt_num(rec.get('momentum'))}",
-            f"Market Depth (Coverage proxy): {_fmt_num(rec.get('depth'), 0)}   |   Listings: {n}",
-        ]
-        for line in lines:
-            c.drawString(60, y, line)
-            y -= 16
+        rows = metrics_df.copy()
 
-    # Thesis (memo-ready)
-    y -= 6
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Investment Thesis (Screening)")
-    y -= 18
-    c.setFont("Helvetica", 11)
+    for _, row in (rows.iterrows() if hasattr(rows, "iterrows") else []):
+        if y < 120:
+            break
+        district = _safe_str(row.get("District", "—"))
+        listings = _fmt_int(row.get("Listings", None))
+        w_ppsqm = _fmt_num(row.get("Weighted Price/sqm (AED)", None), 0)
+        med_ppsqm = _fmt_num(row.get("Median Price/sqm (AED)", None), 0)
+        med_days = _fmt_num(row.get("Median Days Active", None), 1)
 
-    if recommended == "—" or not ok:
-        thesis_lines = [
-            "Coverage under current dataset is insufficient for a confident district-level decision.",
-            "Use this memo to validate the decision framework and request deeper data / scope if interested.",
-        ]
-    else:
-        other = scores_df[scores_df["district"] != recommended].copy() if scores_df is not None else pd.DataFrame()
-
-        best_adoption_other = float(other["adoption"].max()) if len(other) else None
-        best_yield_other = float(other["yield"].max()) if len(other) else None
-        safest_other = float(other["risk"].min()) if len(other) else None  # lower risk is safer
-
-        rec_adoption = float(rec.get("adoption", 0.0) or 0.0)
-        rec_yield = float(rec.get("yield", 0.0) or 0.0)
-        rec_risk = float(rec.get("risk", 0.0) or 0.0)
-
-        adoption_text = (
-            "liquidity proxy is competitive"
-            if best_adoption_other is None
-            else ("liquidity proxy leads peers" if rec_adoption >= best_adoption_other else "liquidity proxy is solid vs peers")
-        )
-        yield_text = (
-            "value proxy is attractive"
-            if best_yield_other is None
-            else ("strongest value proxy (cheaper per sqm)" if rec_yield >= best_yield_other else "balanced value proxy")
-        )
-        risk_text = (
-            "dispersion appears controlled"
-            if safest_other is None
-            else ("safest dispersion among peers" if rec_risk <= safest_other else "dispersion trade-off is acceptable")
-        )
-
-        thesis_lines = [
-            f"{recommended} ranks highest for {profile} under current proxies:",
-            f"- {yield_text}",
-            f"- {adoption_text}",
-            f"- {risk_text} (Risk Index displayed raw; inverted inside composite scores)",
-        ]
-
-    for line in thesis_lines:
-        c.drawString(60, y, line)
-        y -= 16
+        c.drawString(40, y, district)
+        c.drawString(140, y, listings)
+        c.drawString(200, y, w_ppsqm)
+        c.drawString(310, y, med_ppsqm)
+        c.drawString(410, y, med_days)
+        y -= 12
 
     # Limitations
-    y -= 4
+    y -= 10
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Limitations")
+    c.drawString(40, y, "Notes & Limitations")
     y -= 18
     c.setFont("Helvetica", 10)
-    limitations = [
-        "Signals are listings-based (not transactions).",
-        "Yield Potential is a value proxy (price/sqm), not rental yield.",
-        "Liquidity is proxied via DOM + relative volume share.",
+    lines = [
+        "This dashboard uses listing-level data (not notarized transactions).",
+        "Days Active is a listing lifetime proxy: last_seen - first_seen.",
+        "No underwriting: this summary is descriptive screening only.",
+        "For investment decisions, use verified transactions, rent rolls, fees, and capex assumptions.",
     ]
-    for line in limitations:
+    for line in lines:
         c.drawString(60, y, line)
         y -= 14
 
-    # Optional provenance (if df_all provided)
-    if df_all is not None and not df_all.empty:
-        y -= 10
-        _draw_data_provenance(c, y, df_all, districts)
-
-    _footer_disclaimer(c)
+    _footer_disclaimer(c, width, height)
     c.showPage()
     c.save()
-    buffer.seek(0)
-    return buffer.read()
+    return buffer.getvalue()
 
 
-# ============================================================
-# 2) Compare memo
-# ============================================================
 def build_compare_memo_pdf(
-    compare_df: pd.DataFrame,
-    recommended: str,
+    metrics_df: pd.DataFrame,
     df_all: pd.DataFrame,
     districts: list[str] | None = None,
 ) -> bytes:
+    """One-page comparison memo (analysis only, no winner/recommendation)."""
     districts = districts or ["Marina", "Business Bay", "JVC"]
 
     buffer = io.BytesIO()
@@ -264,71 +209,63 @@ def build_compare_memo_pdf(
 
     _draw_header(c, "Dubai Compare Memo")
 
-    c.setFont("Helvetica", 10)
-    c.drawString(40, height - 140, "View: Yield Potential (value proxy) vs Adoption Speed (liquidity proxy)")
+    _draw_data_provenance(c, df_all=df_all, districts=districts)
 
-    # Decision line
+    y = height - 220
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, height - 165, "Trade-off Pick")
-    c.setFont("Helvetica", 11)
-    if recommended == "—":
-        c.drawString(60, height - 183, f"No recommendation (min {RECO_MIN_N} listings required).")
-    else:
-        c.drawString(60, height - 183, f"Top candidate (screening): {recommended}")
-
-    y = height - 215
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "KPI Snapshot (0–100)")
+    c.drawString(40, y, "Cross-District Comparison (Proxies)")
     y -= 18
-
-    cols = ["District", "Yield Potential", "Adoption Speed", "Risk Index", "Barzel Score"]
-    rows = compare_df[cols].copy() if compare_df is not None else pd.DataFrame(columns=cols)
-
-    c.setFont("Helvetica-Bold", 10)
-    header = f"{'District':<16} {'YieldPot':>8} {'Adoption':>9} {'Risk':>7} {'Barzel':>7}"
-    c.drawString(60, y, header)
-    y -= 14
     c.setFont("Helvetica", 10)
+    c.drawString(60, y, "Primary metrics are descriptive: price/sqm and listing lifetime (Days Active).")
 
-    for _, r in rows.iterrows():
-        try:
-            line = (
-                f"{str(r['District']):<16} "
-                f"{float(r['Yield Potential']):>8.1f} "
-                f"{float(r['Adoption Speed']):>9.1f} "
-                f"{float(r['Risk Index']):>7.1f} "
-                f"{float(r['Barzel Score']):>7.1f}"
-            )
-        except Exception:
-            continue
+    y -= 22
+    c.setFont("Helvetica-Bold", 10)
+    cols = [
+        ("District", 40),
+        ("Listings", 130),
+        ("Median Price (AED)", 190),
+        ("Median Size (sqm)", 300),
+        ("Weighted AED/sqm", 400),
+    ]
+    for label, x in cols:
+        c.drawString(x, y, label)
+    y -= 12
+    c.setFont("Helvetica", 9)
+
+    if metrics_df is None or metrics_df.empty:
+        rows = []
+    else:
+        rows = metrics_df.copy()
+
+    for _, row in (rows.iterrows() if hasattr(rows, "iterrows") else []):
+        if y < 120:
+            break
+        c.drawString(40, y, _safe_str(row.get("District", "—")))
+        c.drawString(130, y, _fmt_int(row.get("Listings", None)))
+        c.drawString(190, y, _fmt_num(row.get("Median Price (AED)", None), 0))
+        c.drawString(300, y, _fmt_num(row.get("Median Size (sqm)", None), 1))
+        c.drawString(400, y, _fmt_num(row.get("Weighted Price/sqm (AED)", None), 0))
+        y -= 12
+
+    y -= 10
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, "How to read")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    for line in [
+        "Lower AED/sqm can imply better entry pricing (value proxy), but it may also reflect stock mix.",
+        "Median Days Active is a liquidity proxy; lower can indicate faster absorption (subject to listing practices).",
+        "Always validate with verified transactions and segment by typology (Studio/1BR/2BR...).",
+    ]:
         c.drawString(60, y, line)
         y -= 14
 
-    y -= 6
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y, "Interpretation (Screening)")
-    y -= 18
-    c.setFont("Helvetica", 11)
-    c.drawString(60, y, "Upper-right is the target: stronger value proxy with faster absorption (liquidity proxy).")
-    y -= 16
-    c.drawString(60, y, "Risk Index is displayed raw (higher = more risky) and inverted inside the trade-off score.")
-    y -= 16
-    c.setFont("Helvetica", 10)
-    c.drawString(60, y, "This memo is descriptive for trade-off scanning, not underwriting / pricing.")
-
-    y -= 26
-    _draw_data_provenance(c, y, df_all, districts)
-
-    _footer_disclaimer(c)
+    _footer_disclaimer(c, width, height)
     c.showPage()
     c.save()
-    buffer.seek(0)
-    return buffer.read()
+    return buffer.getvalue()
 
 
-# ============================================================
-# 3) Map & Micro memo
-# ============================================================
 def build_micro_memo_pdf(
     district: str,
     bedrooms: list,
@@ -453,7 +390,7 @@ def build_recommendation_memo_pdf(
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    _draw_header(c, "Dubai Recommendation Memo")
+    _draw_header(c, "Dubai Investment Memo")
 
     c.setFont("Helvetica", 10)
     c.drawString(40, height - 140, f"Investor profile: {_safe_str(profile)}")
