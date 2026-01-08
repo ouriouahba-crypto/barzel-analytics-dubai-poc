@@ -47,7 +47,8 @@ def add_derived_columns(df: pd.DataFrame) -> pd.DataFrame:
         else:
             ls = pd.Series([pd.NaT] * len(out), index=out.index)
 
-        now_utc = pd.Timestamp.utcnow().tz_localize("UTC")
+        now_utc = pd.Timestamp.utcnow()
+
         ls = ls.fillna(now_utc)
 
         days = (ls - fs).dt.total_seconds() / 86400.0
