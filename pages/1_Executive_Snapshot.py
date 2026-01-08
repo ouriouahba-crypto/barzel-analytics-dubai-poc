@@ -7,7 +7,7 @@ from sqlalchemy import text
 from src.app.pdf import build_executive_memo_pdf
 from src.app.guardrails import require_non_empty, now_utc_str, district_counts, warn_low_coverage
 from src.db.db import get_engine
-from src.processing.metrics import district_basic_metrics, format_metrics_table, add_derived_columns
+from src.processing.metrics import district_basic_metrics, format_metrics_table, prepare_listings
 
 from src.app.ui import inject_base_ui, hero, metric_grid, pill
 
@@ -30,7 +30,7 @@ def load_data() -> pd.DataFrame:
     return df
 
 
-df_all = load_data()
+df_all = prepare_listings(load_data())
 require_non_empty(df_all, "listings")
 
 # Basic coverage checks (dataset-specific)
@@ -71,7 +71,7 @@ st.dataframe(metrics_view, use_container_width=True, hide_index=True)
 # -------------------------
 st.subheader("Distributions")
 
-df = add_derived_columns(df_all)
+df = df_all.copy()
 
 left, right = st.columns(2)
 

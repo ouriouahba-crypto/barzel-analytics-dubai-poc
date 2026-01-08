@@ -7,7 +7,7 @@ from sqlalchemy import text
 from src.app.pdf import build_compare_memo_pdf
 from src.app.guardrails import require_non_empty, now_utc_str, district_counts
 from src.db.db import get_engine
-from src.processing.metrics import district_basic_metrics, format_metrics_table, add_derived_columns
+from src.processing.metrics import district_basic_metrics, format_metrics_table, prepare_listings
 
 from src.app.ui import inject_base_ui, hero, pill
 
@@ -28,7 +28,7 @@ def load_data() -> pd.DataFrame:
     return df
 
 
-df_all = load_data()
+df_all = prepare_listings(load_data())
 require_non_empty(df_all, "listings")
 
 counts = district_counts(df_all, DISTRICTS)
@@ -49,7 +49,7 @@ metrics_view = format_metrics_table(metrics_raw)
 st.subheader("Metrics table")
 st.dataframe(metrics_view, use_container_width=True, hide_index=True)
 
-df = add_derived_columns(df_all)
+df = df_all.copy()
 
 st.subheader("Charts")
 
@@ -75,9 +75,9 @@ with c2:
     st.plotly_chart(fig2, use_container_width=True)
 
 fig3 = px.box(
-    df.dropna(subset=["price_per_sqm"]),
+    df.dropna(subset=["price_per_sqm_clip"]),
     x="district",
-    y="price_per_sqm",
+    y="price_per_sqm_clip",
     points="outliers",
     title="Price per sqm distribution by district (AED/sqm)",
 )

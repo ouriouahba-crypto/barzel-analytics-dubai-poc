@@ -112,15 +112,16 @@ def compute_scores_for_district(df_all: pd.DataFrame, district: str) -> Dict:
 
 
 def compute_scores_df(df_all: pd.DataFrame, districts: List[str] | None = None) -> pd.DataFrame:
-    """
-    Single source of truth across the whole app.
-    Returns:
-    district | barzel | adoption | yield | risk | momentum | depth | listings | confidence | can_recommend
-    """
     if districts is None:
         districts = DEFAULT_DISTRICTS
 
-    rows = [compute_scores_for_district(df_all, d) for d in districts]
+    scoped = df_all
+    if "transaction_type" in scoped.columns:
+        tx = scoped["transaction_type"].astype(str).str.lower()
+        if (tx == "sale").any():
+            scoped = scoped[tx == "sale"].copy()
+
+    rows = [compute_scores_for_district(scoped, d) for d in districts]
     df = pd.DataFrame(rows)
 
     cols = [
@@ -136,7 +137,6 @@ def compute_scores_df(df_all: pd.DataFrame, districts: List[str] | None = None) 
         "can_recommend",
     ]
     return df[cols]
-
 
 # -------------------------
 # Investor profiles (fund language)

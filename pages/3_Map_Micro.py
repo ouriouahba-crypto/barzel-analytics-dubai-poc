@@ -14,7 +14,7 @@ from src.app.guardrails import (
     warn_low_sample,
 )
 from src.processing.kpis import adoption_speed_score
-from src.processing.metrics import add_derived_columns
+from src.processing.metrics import prepare_listings
 from src.db.db import get_engine
 
 from src.app.charts import apply_premium_layout
@@ -40,8 +40,15 @@ def load_data() -> pd.DataFrame:
 
 
 def _ppsqm_series(df: pd.DataFrame) -> pd.Series:
+    """Price per sqm series used for micro stats (robust for viz)."""
     if df is None or df.empty:
         return pd.Series(dtype="float64")
+
+    # Prefer pre-cleaned column (stable, outlier-capped)
+    if "price_per_sqm_clip" in df.columns:
+        return pd.to_numeric(df["price_per_sqm_clip"], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+
+    # Fallback compute
     if "price" not in df.columns or "size_sqm" not in df.columns:
         return pd.Series(dtype="float64")
     tmp = df[["price", "size_sqm"]].dropna()
@@ -60,7 +67,7 @@ def _confidence_bucket(n: int) -> str:
     return "Low"
 
 
-df_all = load_data()
+df_all = prepare_listings(load_data())
 require_non_empty(df_all, "listings")
 
 warn_low_coverage(df_all, "latitude", 0.40, "latitude")
@@ -100,9 +107,8 @@ if district != "All" and "district" in df.columns:
 if bedrooms and "bedrooms" in df.columns:
     df = df[df["bedrooms"].isin(bedrooms)]
 
-# Add standard derived columns (price_per_sqm, days_active if available)
-df = add_derived_columns(df)
-df_all_derived = add_derived_columns(df_all)
+# Derived/clean columns are already prepared by prepare_listings()
+df_all_derived = df_all
 
 n = int(len(df))
 conf = _confidence_bucket(n)

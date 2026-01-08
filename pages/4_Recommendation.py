@@ -8,7 +8,7 @@ from src.app.pdf import build_recommendation_memo_pdf
 from src.app.guardrails import require_non_empty, now_utc_str, district_counts, warn_low_coverage
 from src.db.db import get_engine
 from src.processing.engine import compute_scores_df, rank_for_profile, pick_recommendation
-from src.processing.metrics import add_derived_columns
+from src.processing.metrics import prepare_listings
 from src.app.charts import apply_premium_layout, add_value_labels_bar
 
 from src.app.ui import inject_base_ui, hero, metric_grid, pill
@@ -30,7 +30,7 @@ def load_data() -> pd.DataFrame:
     return df
 
 
-df_all = load_data()
+df_all = prepare_listings(load_data())
 require_non_empty(df_all, "listings")
 
 warn_low_coverage(df_all, "size_sqm", min_ratio=0.80, label="Size (sqm)")
@@ -84,7 +84,7 @@ metric_grid(
 
 # --- Premium visuals (analysis only). No winner, no recommendation on-screen.
 st.subheader("Quick visuals (analysis-only)")
-df_v = add_derived_columns(df_all)
+df_v = df_all.copy()  # already prepared (derived + cleaned)
 
 c1, c2 = st.columns(2)
 with c1:
@@ -103,7 +103,7 @@ with c2:
         fig2 = px.violin(
             df_v.dropna(subset=["price_per_sqm", "district"]),
             x="district",
-            y="price_per_sqm",
+            y="price_per_sqm_clip",
             box=True,
             points="outliers",
         )
