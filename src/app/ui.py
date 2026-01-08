@@ -8,14 +8,18 @@ from pathlib import Path
 def inject_base_ui():
     pass
 
-
-def hero(title: str, subtitle: str = ""):
+def hero(title: str, subtitle: str = "", pills: list | None = None):
     st.markdown(f"""
         <div style="padding:1.5rem 0;">
             <h1 style="margin-bottom:0.2rem;">{title}</h1>
             <p style="color:#6b7280;font-size:1.05rem;">{subtitle}</p>
         </div>
     """, unsafe_allow_html=True)
+
+    if pills:
+        for text, status in pills:
+            pill(text, status)
+
 
 def metric_grid(metrics: list):
     cols = st.columns(len(metrics))
