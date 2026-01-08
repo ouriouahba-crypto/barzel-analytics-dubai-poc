@@ -23,13 +23,22 @@ def metric_grid(metrics: list):
         with col:
             st.metric(label, value, help=help_text)
 
-def pill(text: str):
+def pill(text: str, status: str = "neutral"):
+    colors = {
+        "good": ("#ecfdf5", "#065f46"),
+        "neutral": ("#eef2ff", "#3730a3"),
+        "warn": ("#fffbeb", "#92400e"),
+        "bad": ("#fef2f2", "#991b1b"),
+    }
+    bg, fg = colors.get(status, colors["neutral"])
+
     st.markdown(
-        f"<span style='background:#eef2ff;color:#3730a3;"
+        f"<span style='background:{bg};color:{fg};"
         f"padding:4px 10px;border-radius:999px;"
         f"font-size:0.8rem;margin-right:6px;'>{text}</span>",
         unsafe_allow_html=True,
     )
+
 
 # =========================================================
 # Data loader (centralised)
