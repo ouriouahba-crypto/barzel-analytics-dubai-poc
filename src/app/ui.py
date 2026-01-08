@@ -5,13 +5,9 @@ from pathlib import Path
 # =========================================================
 # Base UI helpers (safe, neutral, premium)
 # =========================================================
-
 def inject_base_ui():
-    st.set_page_config(
-        page_title="Barzel Analytics – V2",
-        layout="wide",
-        initial_sidebar_state="expanded",
-    )
+    pass
+
 
 def hero(title: str, subtitle: str = ""):
     st.markdown(f"""
